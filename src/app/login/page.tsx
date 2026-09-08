@@ -1,19 +1,78 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+
+type AppContext = {
+  role: "parent" | "child" | "none";
+  is_anonymous?: boolean;
+};
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignup, setIsSignup] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
-  async function handleSubmit(e: FormEvent) {
+  const [isSignup, setIsSignup] =
+    useState(false);
+
+  const [checking, setChecking] =
+    useState(true);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [message, setMessage] =
+    useState("");
+
+  useEffect(() => {
+    async function checkExistingLogin() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setChecking(false);
+        return;
+      }
+
+      const {
+        data,
+      } = await supabase.rpc(
+        "get_my_app_context"
+      );
+
+      const context =
+        data as AppContext | null;
+
+      if (
+        context?.role === "parent" ||
+        context?.role === "child"
+      ) {
+        router.replace("/");
+        return;
+      }
+
+      if (
+        context?.is_anonymous
+      ) {
+        router.replace(
+          "/child-login"
+        );
+        return;
+      }
+
+      router.replace("/setup");
+    }
+
+    checkExistingLogin();
+  }, [router]);
+
+  async function handleSubmit(
+    e: FormEvent
+  ) {
     e.preventDefault();
 
     setLoading(true);
@@ -21,46 +80,67 @@ export default function LoginPage() {
 
     try {
       if (isSignup) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
+        const {
+          data,
+          error,
+        } =
+          await supabase.auth.signUp({
+            email,
+            password,
+          });
 
         if (error) throw error;
 
         if (!data.session) {
           setMessage(
-            "가입되었습니다. 이메일로 받은 인증 링크를 확인해주세요."
+            "가입되었습니다. 이메일 인증 링크를 확인해주세요."
           );
         } else {
-          router.push("/setup");
+          router.replace("/setup");
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const {
+          error,
+        } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
         if (error) throw error;
 
-        router.push("/setup");
+        router.replace("/");
       }
     } catch (error) {
-      if (error instanceof Error) {
-        setMessage(error.message);
+      if (
+        error instanceof Error
+      ) {
+        setMessage(
+          error.message
+        );
       } else {
-        setMessage("오류가 발생했습니다.");
+        setMessage(
+          "오류가 발생했습니다."
+        );
       }
     } finally {
       setLoading(false);
     }
   }
 
+  if (checking) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        자동 로그인 확인 중...
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F2F2F2]">
       <div className="mx-auto flex min-h-screen max-w-md flex-col bg-white">
         <header className="bg-[#FFD84D] px-6 pb-8 pt-16">
-          <h1 className="text-3xl font-bold text-[#252525]">
+          <h1 className="text-3xl font-bold">
             딸천재톡
           </h1>
 
@@ -69,16 +149,23 @@ export default function LoginPage() {
           </p>
         </header>
 
-        <section className="flex flex-1 flex-col justify-center px-7">
+        <section className="flex flex-1 flex-col justify-center px-7 py-8">
           <div className="mb-8">
-            <p className="text-sm text-[#888]">아빠 계정</p>
+            <p className="text-sm text-[#888]">
+              👨 아빠 계정
+            </p>
 
             <h2 className="mt-1 text-2xl font-bold">
-              {isSignup ? "처음 오셨나요? 👋" : "다시 만나서 반가워요 👋"}
+              {isSignup
+                ? "처음 오셨나요? 👋"
+                : "다시 만나서 반가워요 👋"}
             </h2>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
             <div>
               <label className="mb-2 block text-sm font-semibold">
                 이메일
@@ -87,10 +174,11 @@ export default function LoginPage() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@email.com"
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
                 required
-                className="w-full rounded-xl border border-[#DDDDDD] px-4 py-4 outline-none focus:border-[#FFD84D]"
+                className="w-full rounded-xl border border-[#DDD] px-4 py-4"
               />
             </div>
 
@@ -102,11 +190,12 @@ export default function LoginPage() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="6자 이상 입력"
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
                 minLength={6}
                 required
-                className="w-full rounded-xl border border-[#DDDDDD] px-4 py-4 outline-none focus:border-[#FFD84D]"
+                className="w-full rounded-xl border border-[#DDD] px-4 py-4"
               />
             </div>
 
@@ -125,27 +214,46 @@ export default function LoginPage() {
                 ? "처리 중..."
                 : isSignup
                 ? "아빠 계정 만들기"
-                : "로그인"}
+                : "아빠 로그인"}
             </button>
           </form>
 
           <button
             type="button"
             onClick={() => {
-              setIsSignup(!isSignup);
+              setIsSignup(
+                !isSignup
+              );
+
               setMessage("");
             }}
-            className="mt-6 text-sm text-[#666]"
+            className="mt-5 text-sm text-[#666]"
           >
             {isSignup
               ? "이미 계정이 있어요 → 로그인"
               : "처음 사용하는 경우 → 회원가입"}
           </button>
-        </section>
 
-        <footer className="px-6 pb-8 text-center text-xs text-[#999]">
-          딸의 계정은 아빠가 로그인한 후 만들 수 있습니다.
-        </footer>
+          <div className="my-7 flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#EEE]" />
+            <span className="text-xs text-[#AAA]">
+              또는
+            </span>
+            <div className="h-px flex-1 bg-[#EEE]" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push(
+                "/child-login"
+              )
+            }
+            className="w-full rounded-xl bg-[#F3F3F3] py-4 font-bold"
+          >
+            👧 딸로 들어가기
+          </button>
+        </section>
       </div>
     </main>
   );
