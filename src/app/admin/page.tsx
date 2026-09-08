@@ -13,6 +13,7 @@ type StudyPlan = {
 
 function getToday() {
   const now = new Date();
+
   const local = new Date(
     now.getTime() - now.getTimezoneOffset() * 60 * 1000
   );
@@ -32,6 +33,9 @@ export default function AdminPage() {
   const [note, setNote] = useState("");
 
   const [plans, setPlans] = useState<StudyPlan[]>([]);
+
+  const [pendingCount, setPendingCount] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -47,21 +51,27 @@ export default function AdminPage() {
         return;
       }
 
-      const { data: family } = await supabase
+      const {
+        data: family,
+        error: familyError,
+      } = await supabase
         .from("families")
         .select("id")
         .eq("owner_user_id", user.id)
         .limit(1)
         .single();
 
-      if (!family) {
+      if (familyError || !family) {
         router.replace("/setup");
         return;
       }
 
       setFamilyId(family.id);
 
-      const { data: child } = await supabase
+      const {
+        data: child,
+        error: childError,
+      } = await supabase
         .from("family_members")
         .select("id, display_name")
         .eq("family_id", family.id)
@@ -70,7 +80,7 @@ export default function AdminPage() {
         .limit(1)
         .single();
 
-      if (!child) {
+      if (childError || !child) {
         setMessage("딸 프로필을 찾을 수 없습니다.");
         setLoading(false);
         return;
@@ -78,6 +88,18 @@ export default function AdminPage() {
 
       setChildId(child.id);
       setChildName(child.display_name);
+
+      const {
+        data: pendingRows,
+      } = await supabase
+        .from("reward_requests")
+        .select("id")
+        .eq("family_id", family.id)
+        .eq("status", "requested");
+
+      setPendingCount(
+        pendingRows?.length ?? 0
+      );
 
       setLoading(false);
     }
@@ -92,9 +114,14 @@ export default function AdminPage() {
   }, [familyId, childId, studyDate]);
 
   async function loadPlans() {
-    const { data, error } = await supabase
+    const {
+      data,
+      error,
+    } = await supabase
       .from("study_plans")
-      .select("id, study_date, subject, note")
+      .select(
+        "id, study_date, subject, note"
+      )
       .eq("family_id", familyId)
       .eq("target_member_id", childId)
       .eq("study_date", studyDate)
@@ -126,14 +153,18 @@ export default function AdminPage() {
       return;
     }
 
-    const { error } = await supabase.from("study_plans").insert({
-      family_id: familyId,
-      target_member_id: childId,
-      study_date: studyDate,
-      subject: subject.trim(),
-      note: note.trim() || null,
-      created_by: user.id,
-    });
+    const {
+      error,
+    } = await supabase
+      .from("study_plans")
+      .insert({
+        family_id: familyId,
+        target_member_id: childId,
+        study_date: studyDate,
+        subject: subject.trim(),
+        note: note.trim() || null,
+        created_by: user.id,
+      });
 
     if (error) {
       setMessage(error.message);
@@ -143,7 +174,10 @@ export default function AdminPage() {
 
     setSubject("");
     setNote("");
-    setMessage("공부 계획을 등록했습니다. ✅");
+
+    setMessage(
+      "공부 계획을 등록했습니다. ✅"
+    );
 
     await loadPlans();
 
@@ -151,7 +185,15 @@ export default function AdminPage() {
   }
 
   async function deletePlan(id: string) {
-    const { error } = await supabase
+    const ok = window.confirm(
+      "이 공부 계획을 삭제할까요?"
+    );
+
+    if (!ok) return;
+
+    const {
+      error,
+    } = await supabase
       .from("study_plans")
       .delete()
       .eq("id", id);
@@ -166,8 +208,10 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        불러오는 중...
+      <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7]">
+        <p className="font-semibold">
+          불러오는 중...
+        </p>
       </main>
     );
   }
@@ -183,12 +227,79 @@ export default function AdminPage() {
             ←
           </button>
 
-          <h1 className="text-xl font-bold">아빠 관리</h1>
+          <h1 className="text-xl font-bold">
+            아빠 관리
+          </h1>
         </header>
 
         <section className="p-5">
+          {/* 관리 메뉴 */}
+
+          <div className="mb-7">
+            <p className="mb-3 text-sm text-[#777]">
+              관리 메뉴
+            </p>
+
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/admin/study-days"
+                  )
+                }
+                className="rounded-2xl bg-white p-4 text-center shadow-sm"
+              >
+                <p className="text-2xl">📅</p>
+                <p className="mt-2 text-sm font-bold">
+                  공부요일
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/admin/rewards"
+                  )
+                }
+                className="rounded-2xl bg-white p-4 text-center shadow-sm"
+              >
+                <p className="text-2xl">🎁</p>
+                <p className="mt-2 text-sm font-bold">
+                  상점상품
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/admin/reward-requests"
+                  )
+                }
+                className="relative rounded-2xl bg-white p-4 text-center shadow-sm"
+              >
+                {pendingCount > 0 && (
+                  <span className="absolute right-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#FF6B57] px-1 text-xs font-bold text-white">
+                    {pendingCount}
+                  </span>
+                )}
+
+                <p className="text-2xl">✅</p>
+                <p className="mt-2 text-sm font-bold">
+                  교환신청
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* 공부 계획 */}
+
           <div className="mb-5">
-            <p className="text-sm text-[#777]">공부 계획 관리</p>
+            <p className="text-sm text-[#777]">
+              공부 계획 관리
+            </p>
 
             <h2 className="mt-1 text-2xl font-bold">
               {childName}의 공부 📚
@@ -207,7 +318,9 @@ export default function AdminPage() {
               <input
                 type="date"
                 value={studyDate}
-                onChange={(e) => setStudyDate(e.target.value)}
+                onChange={(e) =>
+                  setStudyDate(e.target.value)
+                }
                 className="w-full rounded-xl border border-[#DDD] p-4"
               />
             </div>
@@ -219,7 +332,9 @@ export default function AdminPage() {
 
               <input
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) =>
+                  setSubject(e.target.value)
+                }
                 placeholder="예: 수학"
                 required
                 className="w-full rounded-xl border border-[#DDD] p-4"
@@ -233,7 +348,9 @@ export default function AdminPage() {
 
               <input
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={(e) =>
+                  setNote(e.target.value)
+                }
                 placeholder="선택사항"
                 className="w-full rounded-xl border border-[#DDD] p-4"
               />
@@ -244,7 +361,9 @@ export default function AdminPage() {
               disabled={saving}
               className="w-full rounded-xl bg-[#FFD84D] py-4 font-bold disabled:opacity-50"
             >
-              {saving ? "등록 중..." : "공부 계획 추가"}
+              {saving
+                ? "등록 중..."
+                : "공부 계획 추가"}
             </button>
           </form>
 
@@ -283,7 +402,10 @@ export default function AdminPage() {
                     </div>
 
                     <button
-                      onClick={() => deletePlan(plan.id)}
+                      type="button"
+                      onClick={() =>
+                        deletePlan(plan.id)
+                      }
                       className="rounded-lg bg-[#F3F3F3] px-3 py-2 text-sm"
                     >
                       삭제
