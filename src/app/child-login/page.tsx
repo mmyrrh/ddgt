@@ -1,8 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+
+import {
+  getEnglishKeyFromCode,
+  normalizeFamilyCodeInput,
+} from "@/lib/familyCode";
 
 type AppContext = {
   role: "parent" | "child" | "none";
@@ -12,16 +24,35 @@ type AppContext = {
 export default function ChildLoginPage() {
   const router = useRouter();
 
-  const [familyCode, setFamilyCode] = useState("");
-  const [pin, setPin] = useState("");
+  const familyCodeInputRef =
+    useRef<HTMLInputElement>(null);
 
-  const [checking, setChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const composingRef = useRef(false);
+
+  const suppressNativeChangeRef =
+    useRef(false);
+
+  const [familyCode, setFamilyCode] =
+    useState("");
+
+  const [pin, setPin] =
+    useState("");
+
+  const [checking, setChecking] =
+    useState(true);
+
+  const [loading, setLoading] =
+    useState(false);
 
   const [parentSession, setParentSession] =
     useState(false);
 
-  const [message, setMessage] = useState("");
+  const [message, setMessage] =
+    useState("");
+
+  /* =========================================================
+     자동로그인 확인
+  ========================================================= */
 
   useEffect(() => {
     async function checkAutoLogin() {
@@ -36,9 +67,20 @@ export default function ChildLoginPage() {
 
       const {
         data,
+        error,
       } = await supabase.rpc(
         "get_my_app_context"
       );
+
+      if (error) {
+        console.error(
+          "로그인 상태 확인 오류:",
+          error
+        );
+
+        setChecking(false);
+        return;
+      }
 
       const context =
         data as AppContext | null;
@@ -62,6 +104,134 @@ export default function ChildLoginPage() {
     checkAutoLogin();
   }, [router]);
 
+  /* =========================================================
+     가족코드 키보드 처리
+
+     한글 입력 상태:
+     ㅇ 키 1번 = D 1개
+
+     영문 입력 상태:
+     d / D 모두 D 1개
+  ========================================================= */
+
+  function handleFamilyCodeKeyDown(
+    e: KeyboardEvent<HTMLInputElement>
+  ) {
+    const englishKey =
+      getEnglishKeyFromCode(e.code);
+
+    if (!englishKey) {
+      return;
+    }
+
+    /*
+      브라우저/IME가 실제 한글 문자를
+      입력하는 것은 막고 우리가 물리키를
+      영문으로 한 번만 입력한다.
+    */
+    e.preventDefault();
+
+    suppressNativeChangeRef.current =
+      true;
+
+    const start =
+      e.currentTarget.selectionStart ??
+      familyCode.length;
+
+    const end =
+      e.currentTarget.selectionEnd ??
+      start;
+
+    const nextRaw =
+      familyCode.slice(0, start) +
+      englishKey +
+      familyCode.slice(end);
+
+    const nextValue =
+      normalizeFamilyCodeInput(
+        nextRaw
+      );
+
+    setFamilyCode(nextValue);
+
+    const nextCaret =
+      Math.min(
+        start + 1,
+        nextValue.length
+      );
+
+    requestAnimationFrame(() => {
+      familyCodeInputRef.current?.setSelectionRange(
+        nextCaret,
+        nextCaret
+      );
+
+      /*
+        일반 영문 입력이었다면
+        composition이 없으므로 여기서 해제.
+      */
+      if (!composingRef.current) {
+        suppressNativeChangeRef.current =
+          false;
+      }
+    });
+  }
+
+  /* =========================================================
+     일반 변경
+     Backspace / Delete / 붙여넣기 등
+  ========================================================= */
+
+  function handleFamilyCodeChange(
+    value: string
+  ) {
+    /*
+      이미 keyDown에서 처리한 IME 입력은
+      다시 처리하지 않는다.
+    */
+    if (
+      composingRef.current ||
+      suppressNativeChangeRef.current
+    ) {
+      return;
+    }
+
+    setFamilyCode(
+      normalizeFamilyCodeInput(
+        value
+      )
+    );
+  }
+
+  /* =========================================================
+     한글 IME 시작
+  ========================================================= */
+
+  function handleCompositionStart() {
+    composingRef.current = true;
+  }
+
+  /* =========================================================
+     한글 IME 종료
+
+     중요:
+     여기서 ㅇ -> D 변환을 다시 하지 않는다.
+     이미 KeyDown에서 D를 넣었기 때문.
+  ========================================================= */
+
+  function handleCompositionEnd() {
+    composingRef.current = false;
+
+    requestAnimationFrame(() => {
+      suppressNativeChangeRef.current =
+        false;
+    });
+  }
+
+  /* =========================================================
+     아빠 로그아웃
+  ========================================================= */
+
   async function logoutParent() {
     const ok = window.confirm(
       "아빠 계정에서 로그아웃하고 딸 로그인으로 전환할까요?"
@@ -75,6 +245,10 @@ export default function ChildLoginPage() {
     setMessage("");
   }
 
+  /* =========================================================
+     딸 로그인
+  ========================================================= */
+
   async function handleSubmit(
     e: FormEvent
   ) {
@@ -84,13 +258,28 @@ export default function ChildLoginPage() {
       setMessage(
         "먼저 아빠 계정에서 로그아웃해주세요."
       );
+
       return;
     }
 
-    if (!familyCode.trim()) {
-      setMessage(
-        "가족 코드를 입력해주세요."
+    const normalizedCode =
+      normalizeFamilyCodeInput(
+        familyCode
       );
+
+    setFamilyCode(
+      normalizedCode
+    );
+
+    if (
+      !/^[A-Z0-9]{4,12}$/.test(
+        normalizedCode
+      )
+    ) {
+      setMessage(
+        "가족코드는 영문 또는 숫자 4~12자리입니다."
+      );
+
       return;
     }
 
@@ -98,6 +287,7 @@ export default function ChildLoginPage() {
       setMessage(
         "PIN은 숫자 6자리입니다."
       );
+
       return;
     }
 
@@ -108,8 +298,7 @@ export default function ChildLoginPage() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    /* 처음 접속한 딸 기기라면
-       익명 Auth 계정 생성 */
+    /* 최초 딸 로그인 */
 
     if (!user) {
       const {
@@ -144,9 +333,7 @@ export default function ChildLoginPage() {
       "claim_child_session",
       {
         p_family_code:
-          familyCode
-            .trim()
-            .toUpperCase(),
+          normalizedCode,
         p_pin: pin,
       }
     );
@@ -164,6 +351,10 @@ export default function ChildLoginPage() {
     }
   }
 
+  /* =========================================================
+     자동로그인 확인 중
+  ========================================================= */
+
   if (checking) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7]">
@@ -173,6 +364,10 @@ export default function ChildLoginPage() {
       </main>
     );
   }
+
+  /* =========================================================
+     UI
+  ========================================================= */
 
   return (
     <main className="min-h-screen bg-[#F2F2F2]">
@@ -216,29 +411,49 @@ export default function ChildLoginPage() {
               onSubmit={handleSubmit}
               className="space-y-4"
             >
+              {/* 가족코드 */}
+
               <div>
                 <label className="mb-2 block text-sm font-bold">
                   가족 코드
                 </label>
 
                 <input
+                  ref={
+                    familyCodeInputRef
+                  }
                   value={familyCode}
+                  onKeyDown={
+                    handleFamilyCodeKeyDown
+                  }
+                  onCompositionStart={
+                    handleCompositionStart
+                  }
+                  onCompositionEnd={
+                    handleCompositionEnd
+                  }
                   onChange={(e) =>
-                    setFamilyCode(
+                    handleFamilyCodeChange(
                       e.target.value
-                        .toUpperCase()
-                        .replace(
-                          /[^A-Z0-9]/g,
-                          ""
-                        )
                     )
                   }
-                  placeholder="예: A1B2C3D4"
-                  maxLength={8}
+                  placeholder="가족코드"
+                  maxLength={12}
+                  inputMode="text"
+                  lang="en"
                   autoCapitalize="characters"
-                  className="w-full rounded-xl border border-[#DDD] p-4 text-center text-lg font-bold uppercase tracking-[0.15em]"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="w-full rounded-xl border border-[#DDD] p-4 text-center text-lg font-bold uppercase tracking-[0.12em]"
                 />
+
+                <p className="mt-2 text-center text-xs text-[#999]">
+                  영문 또는 숫자 4~12자리
+                </p>
               </div>
+
+              {/* PIN */}
 
               <div>
                 <label className="mb-2 block text-sm font-bold">
@@ -259,6 +474,7 @@ export default function ChildLoginPage() {
                     )
                   }
                   placeholder="● ● ● ● ● ●"
+                  autoComplete="off"
                   className="w-full rounded-xl border border-[#DDD] p-4 text-center text-xl tracking-[0.4em]"
                 />
               </div>

@@ -40,6 +40,10 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  /* =========================================================
+     초기 데이터
+  ========================================================= */
+
   useEffect(() => {
     async function init() {
       const {
@@ -50,6 +54,8 @@ export default function AdminPage() {
         router.replace("/login");
         return;
       }
+
+      /* 가족 */
 
       const {
         data: family,
@@ -67,6 +73,8 @@ export default function AdminPage() {
       }
 
       setFamilyId(family.id);
+
+      /* 딸 */
 
       const {
         data: child,
@@ -89,13 +97,24 @@ export default function AdminPage() {
       setChildId(child.id);
       setChildName(child.display_name);
 
+      /* 승인 대기 교환 신청 */
+
       const {
         data: pendingRows,
+        error: pendingError,
       } = await supabase
         .from("reward_requests")
         .select("id")
         .eq("family_id", family.id)
+        .eq("member_id", child.id)
         .eq("status", "requested");
+
+      if (pendingError) {
+        console.error(
+          "교환 신청 조회 오류:",
+          pendingError
+        );
+      }
 
       setPendingCount(
         pendingRows?.length ?? 0
@@ -106,6 +125,10 @@ export default function AdminPage() {
 
     init();
   }, [router]);
+
+  /* =========================================================
+     선택한 날짜 공부 계획 조회
+  ========================================================= */
 
   useEffect(() => {
     if (!familyId || !childId) return;
@@ -136,10 +159,17 @@ export default function AdminPage() {
     setPlans(data ?? []);
   }
 
+  /* =========================================================
+     공부 계획 등록
+  ========================================================= */
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
-    if (!subject.trim()) return;
+    if (!subject.trim()) {
+      setMessage("과목을 입력해주세요.");
+      return;
+    }
 
     setSaving(true);
     setMessage("");
@@ -184,6 +214,10 @@ export default function AdminPage() {
     setSaving(false);
   }
 
+  /* =========================================================
+     공부 계획 삭제
+  ========================================================= */
+
   async function deletePlan(id: string) {
     const ok = window.confirm(
       "이 공부 계획을 삭제할까요?"
@@ -203,44 +237,77 @@ export default function AdminPage() {
       return;
     }
 
+    setMessage(
+      "공부 계획을 삭제했습니다."
+    );
+
     await loadPlans();
   }
+
+  /* =========================================================
+     로딩
+  ========================================================= */
 
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7]">
         <p className="font-semibold">
-          불러오는 중...
+          아빠 관리 불러오는 중...
         </p>
       </main>
     );
   }
 
+  /* =========================================================
+     UI
+  ========================================================= */
+
   return (
     <main className="min-h-screen bg-[#F2F2F2] text-[#252525]">
       <div className="mx-auto min-h-screen max-w-md bg-[#F7F7F7]">
+        {/* 상단 */}
+
         <header className="flex h-16 items-center bg-[#FFD84D] px-5">
           <button
             onClick={() => router.push("/")}
             className="mr-4 text-xl"
+            aria-label="홈으로"
           >
             ←
           </button>
 
-          <h1 className="text-xl font-bold">
-            아빠 관리
-          </h1>
+          <div>
+            <h1 className="text-xl font-bold">
+              아빠 관리
+            </h1>
+
+            <p className="text-[10px] text-[#666]">
+              👨 아빠 전용
+            </p>
+          </div>
         </header>
 
         <section className="p-5">
-          {/* 관리 메뉴 */}
+          {/* =================================================
+              관리 메뉴
+          ================================================= */}
 
           <div className="mb-7">
-            <p className="mb-3 text-sm text-[#777]">
-              관리 메뉴
-            </p>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-[#777]">
+                  관리 메뉴
+                </p>
 
-            <div className="grid grid-cols-3 gap-3">
+                <h2 className="mt-1 text-xl font-bold">
+                  무엇을 관리할까요?
+                </h2>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* 공부 요일 */}
+
               <button
                 type="button"
                 onClick={() =>
@@ -248,13 +315,22 @@ export default function AdminPage() {
                     "/admin/study-days"
                   )
                 }
-                className="rounded-2xl bg-white p-4 text-center shadow-sm"
+                className="rounded-2xl bg-white p-5 text-left shadow-sm transition hover:brightness-95"
               >
-                <p className="text-2xl">📅</p>
-                <p className="mt-2 text-sm font-bold">
+                <p className="text-3xl">
+                  📅
+                </p>
+
+                <p className="mt-3 font-bold">
                   공부요일
                 </p>
+
+                <p className="mt-1 text-xs text-[#777]">
+                  지정 공부일 설정
+                </p>
               </button>
+
+              {/* 상점 상품 */}
 
               <button
                 type="button"
@@ -263,13 +339,22 @@ export default function AdminPage() {
                     "/admin/rewards"
                   )
                 }
-                className="rounded-2xl bg-white p-4 text-center shadow-sm"
+                className="rounded-2xl bg-white p-5 text-left shadow-sm transition hover:brightness-95"
               >
-                <p className="text-2xl">🎁</p>
-                <p className="mt-2 text-sm font-bold">
+                <p className="text-3xl">
+                  🎁
+                </p>
+
+                <p className="mt-3 font-bold">
                   상점상품
                 </p>
+
+                <p className="mt-1 text-xs text-[#777]">
+                  보상 상품 등록
+                </p>
               </button>
+
+              {/* 교환 신청 */}
 
               <button
                 type="button"
@@ -278,23 +363,56 @@ export default function AdminPage() {
                     "/admin/reward-requests"
                   )
                 }
-                className="relative rounded-2xl bg-white p-4 text-center shadow-sm"
+                className="relative rounded-2xl bg-white p-5 text-left shadow-sm transition hover:brightness-95"
               >
                 {pendingCount > 0 && (
-                  <span className="absolute right-2 top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#FF6B57] px-1 text-xs font-bold text-white">
+                  <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#FF6B57] px-1 text-xs font-bold text-white">
                     {pendingCount}
                   </span>
                 )}
 
-                <p className="text-2xl">✅</p>
-                <p className="mt-2 text-sm font-bold">
+                <p className="text-3xl">
+                  ✅
+                </p>
+
+                <p className="mt-3 font-bold">
                   교환신청
+                </p>
+
+                <p className="mt-1 text-xs text-[#777]">
+                  승인 · 거절 관리
+                </p>
+              </button>
+
+              {/* 딸 로그인 설정 */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/admin/child-login"
+                  )
+                }
+                className="rounded-2xl bg-white p-5 text-left shadow-sm transition hover:brightness-95"
+              >
+                <p className="text-3xl">
+                  🔐
+                </p>
+
+                <p className="mt-3 font-bold">
+                  딸 로그인
+                </p>
+
+                <p className="mt-1 text-xs text-[#777]">
+                  가족코드 · PIN 설정
                 </p>
               </button>
             </div>
           </div>
 
-          {/* 공부 계획 */}
+          {/* =================================================
+              공부 계획
+          ================================================= */}
 
           <div className="mb-5">
             <p className="text-sm text-[#777]">
@@ -310,6 +428,8 @@ export default function AdminPage() {
             onSubmit={handleSubmit}
             className="rounded-2xl bg-white p-5 shadow-sm"
           >
+            {/* 날짜 */}
+
             <div className="mb-4">
               <label className="mb-2 block text-sm font-bold">
                 공부 날짜
@@ -319,11 +439,15 @@ export default function AdminPage() {
                 type="date"
                 value={studyDate}
                 onChange={(e) =>
-                  setStudyDate(e.target.value)
+                  setStudyDate(
+                    e.target.value
+                  )
                 }
                 className="w-full rounded-xl border border-[#DDD] p-4"
               />
             </div>
+
+            {/* 과목 */}
 
             <div className="mb-4">
               <label className="mb-2 block text-sm font-bold">
@@ -333,7 +457,9 @@ export default function AdminPage() {
               <input
                 value={subject}
                 onChange={(e) =>
-                  setSubject(e.target.value)
+                  setSubject(
+                    e.target.value
+                  )
                 }
                 placeholder="예: 수학"
                 required
@@ -341,17 +467,21 @@ export default function AdminPage() {
               />
             </div>
 
+            {/* 내용 */}
+
             <div className="mb-5">
               <label className="mb-2 block text-sm font-bold">
-                간단한 내용
+                공부 내용
               </label>
 
               <input
                 value={note}
                 onChange={(e) =>
-                  setNote(e.target.value)
+                  setNote(
+                    e.target.value
+                  )
                 }
-                placeholder="선택사항"
+                placeholder="예: 문제집 20~25쪽"
                 className="w-full rounded-xl border border-[#DDD] p-4"
               />
             </div>
@@ -367,20 +497,42 @@ export default function AdminPage() {
             </button>
           </form>
 
+          {/* 메시지 */}
+
           {message && (
             <div className="mt-4 rounded-xl bg-[#FFF4C2] p-4 text-sm">
               {message}
             </div>
           )}
 
+          {/* =================================================
+              등록된 계획
+          ================================================= */}
+
           <div className="mt-7">
-            <h3 className="mb-3 font-bold">
-              {studyDate} 공부 계획
-            </h3>
+            <div className="mb-3">
+              <p className="text-sm text-[#777]">
+                선택 날짜
+              </p>
+
+              <h3 className="mt-1 font-bold">
+                {studyDate} 공부 계획
+              </h3>
+            </div>
 
             {plans.length === 0 ? (
-              <div className="rounded-2xl bg-white p-6 text-center text-[#888]">
-                등록된 공부 계획이 없습니다.
+              <div className="rounded-2xl bg-white p-7 text-center shadow-sm">
+                <p className="text-3xl">
+                  📭
+                </p>
+
+                <p className="mt-3 font-bold">
+                  등록된 공부 계획이 없습니다.
+                </p>
+
+                <p className="mt-1 text-sm text-[#888]">
+                  위에서 공부 계획을 추가해주세요.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -389,7 +541,7 @@ export default function AdminPage() {
                     key={plan.id}
                     className="flex items-center justify-between rounded-2xl bg-white p-5 shadow-sm"
                   >
-                    <div>
+                    <div className="min-w-0 pr-4">
                       <p className="font-bold">
                         📘 {plan.subject}
                       </p>
@@ -404,9 +556,11 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        deletePlan(plan.id)
+                        deletePlan(
+                          plan.id
+                        )
                       }
-                      className="rounded-lg bg-[#F3F3F3] px-3 py-2 text-sm"
+                      className="shrink-0 rounded-lg bg-[#F3F3F3] px-3 py-2 text-sm"
                     >
                       삭제
                     </button>
