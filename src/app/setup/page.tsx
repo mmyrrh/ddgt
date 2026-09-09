@@ -76,7 +76,7 @@ export default function SetupPage() {
     <main className="min-h-screen bg-[#F2F2F2]">
       <div className="mx-auto min-h-screen max-w-md bg-white">
         <header className="bg-[#FFD84D] px-6 pb-8 pt-16">
-          <h1 className="text-3xl font-bold">딸천재톡</h1>
+          <h1 className="text-3xl font-bold">SDgram</h1>
           <p className="mt-2 text-[#555]">
             우리 가족을 등록해주세요
           </p>
@@ -108,13 +108,13 @@ export default function SetupPage() {
 
             <div>
               <label className="mb-2 block font-bold">
-                아빠 이름
+                부모 이름
               </label>
 
               <input
                 value={parentName}
                 onChange={(e) => setParentName(e.target.value)}
-                placeholder="예: 아빠"
+                placeholder="예: 아빠, 엄마"
                 required
                 className="w-full rounded-xl border border-[#DDD] p-4 outline-none focus:border-[#FFD84D]"
               />

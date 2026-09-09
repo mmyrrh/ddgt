@@ -4,6 +4,12 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+type Child = {
+  id: string;
+  display_name: string;
+  avatar_emoji: string | null;
+};
+
 type StudyPlan = {
   id: string;
   study_date: string;
@@ -25,8 +31,13 @@ export default function AdminPage() {
   const router = useRouter();
 
   const [familyId, setFamilyId] = useState("");
+
+  const [children, setChildren] = useState<Child[]>([]);
   const [childId, setChildId] = useState("");
   const [childName, setChildName] = useState("");
+
+  const [newChildName, setNewChildName] = useState("");
+  const [addingChild, setAddingChild] = useState(false);
 
   const [studyDate, setStudyDate] = useState(getToday());
   const [subject, setSubject] = useState("");
@@ -74,57 +85,136 @@ export default function AdminPage() {
 
       setFamilyId(family.id);
 
-      /* 딸 */
+      /* 자녀 목록 */
 
       const {
-        data: child,
+        data: childRows,
         error: childError,
       } = await supabase
         .from("family_members")
-        .select("id, display_name")
+        .select("id, display_name, avatar_emoji")
         .eq("family_id", family.id)
         .eq("role", "child")
         .eq("is_active", true)
-        .limit(1)
-        .single();
+        .order("created_at");
 
-      if (childError || !child) {
-        setMessage("딸 프로필을 찾을 수 없습니다.");
+      if (childError || !childRows || childRows.length === 0) {
+        setMessage("자녀 프로필을 찾을 수 없습니다.");
         setLoading(false);
         return;
       }
 
-      setChildId(child.id);
-      setChildName(child.display_name);
+      setChildren(childRows);
+
+      const firstChild = childRows[0];
+
+      setChildId(firstChild.id);
+      setChildName(firstChild.display_name);
 
       /* 승인 대기 교환 신청 */
 
-      const {
-        data: pendingRows,
-        error: pendingError,
-      } = await supabase
-        .from("reward_requests")
-        .select("id")
-        .eq("family_id", family.id)
-        .eq("member_id", child.id)
-        .eq("status", "requested");
+const {
+  data: pendingRows,
+  error: pendingError,
+} = await supabase
+  .from("reward_requests")
+  .select("id")
+  .eq("family_id", family.id)
+  .eq("status", "requested");
 
-      if (pendingError) {
-        console.error(
-          "교환 신청 조회 오류:",
-          pendingError
-        );
-      }
+if (pendingError) {
+  console.error(
+    "교환 신청 조회 오류:",
+    pendingError
+  );
+}
 
-      setPendingCount(
-        pendingRows?.length ?? 0
-      );
+setPendingCount(
+  pendingRows?.length ?? 0
+);
 
       setLoading(false);
     }
 
     init();
   }, [router]);
+
+  /* =========================================================
+     자녀 선택
+  ========================================================= */
+
+  function handleSelectChild(child: Child) {
+    setChildId(child.id);
+    setChildName(child.display_name);
+    setMessage("");
+  }
+
+  /* =========================================================
+     자녀 추가
+  ========================================================= */
+
+  async function handleAddChild(e: FormEvent) {
+    e.preventDefault();
+
+    const name = newChildName.trim();
+
+    if (!name) {
+      setMessage("아들 이름을 입력해주세요.");
+      return;
+    }
+
+    setAddingChild(true);
+    setMessage("");
+
+    const { data, error } = await supabase.rpc(
+      "add_child",
+      {
+        p_child_name: name,
+        p_avatar_emoji: "👦",
+      }
+    );
+
+    if (error) {
+      console.error("아들 추가 오류:", error);
+      setMessage(error.message);
+      setAddingChild(false);
+      return;
+    }
+
+    console.log("추가된 자녀 ID:", data);
+
+    const {
+      data: childRows,
+      error: childError,
+    } = await supabase
+      .from("family_members")
+      .select("id, display_name, avatar_emoji")
+      .eq("family_id", familyId)
+      .eq("role", "child")
+      .eq("is_active", true)
+      .order("created_at");
+
+    if (!childError && childRows) {
+      setChildren(childRows);
+
+      const addedChild = childRows.find(
+        (child) => child.id === data
+      );
+
+      if (addedChild) {
+        setChildId(addedChild.id);
+        setChildName(addedChild.display_name);
+      }
+    }
+
+    setNewChildName("");
+
+    setMessage(
+      `${name}을(를) 자녀로 추가했습니다. 👦`
+    );
+
+    setAddingChild(false);
+  }
 
   /* =========================================================
      선택한 날짜 공부 계획 조회
@@ -166,6 +256,11 @@ export default function AdminPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
+    if (!childId) {
+      setMessage("공부할 자녀를 선택해주세요.");
+      return;
+    }
+
     if (!subject.trim()) {
       setMessage("과목을 입력해주세요.");
       return;
@@ -206,7 +301,7 @@ export default function AdminPage() {
     setNote("");
 
     setMessage(
-      "공부 계획을 등록했습니다. ✅"
+      `${childName}에게 공부 계획을 등록했습니다. ✅`
     );
 
     await loadPlans();
@@ -252,7 +347,7 @@ export default function AdminPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7]">
         <p className="font-semibold">
-          아빠 관리 불러오는 중...
+          부모 관리 불러오는 중...
         </p>
       </main>
     );
@@ -278,11 +373,11 @@ export default function AdminPage() {
 
           <div>
             <h1 className="text-xl font-bold">
-              아빠 관리
+              부모 관리
             </h1>
 
             <p className="text-[10px] text-[#666]">
-              👨 아빠 전용
+              👨 부모 전용
             </p>
           </div>
         </header>
@@ -384,7 +479,7 @@ export default function AdminPage() {
                 </p>
               </button>
 
-              {/* 딸 로그인 설정 */}
+              {/* 자녀 로그인 설정 */}
 
               <button
                 type="button"
@@ -400,7 +495,7 @@ export default function AdminPage() {
                 </p>
 
                 <p className="mt-3 font-bold">
-                  딸 로그인
+                  자녀 로그인 설정
                 </p>
 
                 <p className="mt-1 text-xs text-[#777]">
@@ -411,7 +506,54 @@ export default function AdminPage() {
           </div>
 
           {/* =================================================
-              공부 계획
+              자녀 추가
+          ================================================= */}
+
+          <div className="mb-7">
+            <div className="mb-3">
+              <p className="text-sm text-[#777]">
+                자녀 관리
+              </p>
+
+              <h2 className="mt-1 text-xl font-bold">
+                아들 추가 👦
+              </h2>
+            </div>
+
+            <form
+              onSubmit={handleAddChild}
+              className="rounded-2xl bg-white p-5 shadow-sm"
+            >
+              <label className="mb-2 block text-sm font-bold">
+                아들 이름
+              </label>
+
+              <input
+                value={newChildName}
+                onChange={(e) =>
+                  setNewChildName(
+                    e.target.value
+                  )
+                }
+                placeholder="예: 민준"
+                disabled={addingChild}
+                className="mb-3 w-full rounded-xl border border-[#DDD] p-4"
+              />
+
+              <button
+                type="submit"
+                disabled={addingChild}
+                className="w-full rounded-xl bg-[#FFD84D] py-4 font-bold disabled:opacity-50"
+              >
+                {addingChild
+                  ? "추가 중..."
+                  : "아들 추가"}
+              </button>
+            </form>
+          </div>
+
+          {/* =================================================
+              공부 계획 대상 자녀 선택
           ================================================= */}
 
           <div className="mb-5">
@@ -420,8 +562,49 @@ export default function AdminPage() {
             </p>
 
             <h2 className="mt-1 text-2xl font-bold">
-              {childName}의 공부 📚
+              누구의 공부를 관리할까요? 📚
             </h2>
+          </div>
+
+          <div className="mb-5 grid grid-cols-2 gap-3">
+            {children.map((child) => (
+              <button
+                key={child.id}
+                type="button"
+                onClick={() =>
+                  handleSelectChild(child)
+                }
+                className={`rounded-2xl p-4 text-left shadow-sm transition ${
+                  child.id === childId
+                    ? "bg-[#FFD84D]"
+                    : "bg-white hover:brightness-95"
+                }`}
+              >
+                <p className="text-3xl">
+                  {child.avatar_emoji ?? "👦"}
+                </p>
+
+                <p className="mt-2 font-bold">
+                  {child.display_name}
+                </p>
+
+                <p className="mt-1 text-xs text-[#777]">
+                  {child.id === childId
+                    ? "선택됨 ✓"
+                    : "선택하기"}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-4 rounded-2xl bg-[#FFF4C2] p-4">
+            <p className="text-sm text-[#777]">
+              현재 선택한 자녀
+            </p>
+
+            <p className="mt-1 text-lg font-bold">
+              {childName} 👤
+            </p>
           </div>
 
           <form
@@ -493,7 +676,7 @@ export default function AdminPage() {
             >
               {saving
                 ? "등록 중..."
-                : "공부 계획 추가"}
+                : `${childName} 공부 계획 추가`}
             </button>
           </form>
 
@@ -512,7 +695,7 @@ export default function AdminPage() {
           <div className="mt-7">
             <div className="mb-3">
               <p className="text-sm text-[#777]">
-                선택 날짜
+                {childName}
               </p>
 
               <h3 className="mt-1 font-bold">

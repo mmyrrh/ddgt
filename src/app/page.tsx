@@ -60,7 +60,8 @@ function getToday() {
   const now = new Date();
 
   const local = new Date(
-    now.getTime() - now.getTimezoneOffset() * 60 * 1000
+    now.getTime() -
+      now.getTimezoneOffset() * 60 * 1000
   );
 
   return local.toISOString().slice(0, 10);
@@ -68,8 +69,12 @@ function getToday() {
 
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -79,42 +84,71 @@ function getCurrentWeekDates() {
   const currentDay = today.getDay();
 
   const diffToMonday =
-    currentDay === 0 ? -6 : 1 - currentDay;
+    currentDay === 0
+      ? -6
+      : 1 - currentDay;
 
   const monday = new Date(today);
 
-  monday.setDate(today.getDate() + diffToMonday);
+  monday.setDate(
+    today.getDate() + diffToMonday
+  );
 
-  const labels = ["월", "화", "수", "목", "금", "토", "일"];
+  const labels = [
+    "월",
+    "화",
+    "수",
+    "목",
+    "금",
+    "토",
+    "일",
+  ];
 
-  return labels.map((label, index) => {
-    const date = new Date(monday);
+  return labels.map(
+    (label, index) => {
+      const date = new Date(monday);
 
-    date.setDate(monday.getDate() + index);
+      date.setDate(
+        monday.getDate() + index
+      );
 
-    return {
-      weekday: index + 1,
-      label,
-      date: formatLocalDate(date),
-    };
-  });
+      return {
+        weekday: index + 1,
+        label,
+        date: formatLocalDate(date),
+      };
+    }
+  );
 }
 
 export default function Home() {
   const router = useRouter();
 
-  const [role, setRole] = useState<Role>("none");
+  const [role, setRole] =
+    useState<Role>("none");
 
-  const [tab, setTab] = useState<Tab>("home");
-  const [completed, setCompleted] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] =
+    useState<Tab>("home");
 
-  const [requestingRewardId, setRequestingRewardId] =
-    useState("");
+  const [completed, setCompleted] =
+    useState(false);
 
-  const [childName, setChildName] = useState("딸");
-  const [points, setPoints] = useState(0);
-  const [streak, setStreak] = useState(0);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [
+    requestingRewardId,
+    setRequestingRewardId,
+  ] = useState("");
+
+  const [childName, setChildName] =
+    useState("딸");
+
+  const [points, setPoints] =
+    useState(0);
+
+  const [streak, setStreak] =
+    useState(0);
 
   const [todayPlans, setTodayPlans] =
     useState<StudyPlan[]>([]);
@@ -125,8 +159,10 @@ export default function Home() {
   const [rewards, setRewards] =
     useState<Reward[]>([]);
 
-  const [pendingRewardIds, setPendingRewardIds] =
-    useState<string[]>([]);
+  const [
+    pendingRewardIds,
+    setPendingRewardIds,
+  ] = useState<string[]>([]);
 
   useEffect(() => {
     async function loadData() {
@@ -144,13 +180,15 @@ export default function Home() {
       }
 
       /* -----------------------------------------------
-         2. 현재 사용자가 아빠인지 딸인지 확인
+         2. 현재 사용자가 부모인지 자녀인지 확인
       ----------------------------------------------- */
 
       const {
         data: contextData,
         error: contextError,
-      } = await supabase.rpc("get_my_app_context");
+      } = await supabase.rpc(
+        "get_my_app_context"
+      );
 
       if (contextError) {
         console.error(
@@ -167,7 +205,9 @@ export default function Home() {
 
       if (context.role === "none") {
         if (context.is_anonymous) {
-          router.replace("/child-login");
+          router.replace(
+            "/child-login"
+          );
         } else {
           router.replace("/setup");
         }
@@ -180,15 +220,18 @@ export default function Home() {
         !context.child_id
       ) {
         console.error(
-          "가족 또는 딸 정보를 찾을 수 없습니다."
+          "가족 또는 자녀 정보를 찾을 수 없습니다."
         );
 
         setLoading(false);
         return;
       }
 
-      const familyId = context.family_id;
-      const childId = context.child_id;
+      const familyId =
+        context.family_id;
+
+      const childId =
+        context.child_id;
 
       setRole(context.role);
 
@@ -210,8 +253,14 @@ export default function Home() {
         .select(
           "id, title, description, emoji, cost_points, is_active"
         )
-        .eq("family_id", familyId)
-        .eq("is_active", true)
+        .eq(
+          "family_id",
+          familyId
+        )
+        .eq(
+          "is_active",
+          true
+        )
         .order("cost_points")
         .order("created_at");
 
@@ -221,7 +270,9 @@ export default function Home() {
           rewardsError
         );
       } else {
-        setRewards(rewardRows ?? []);
+        setRewards(
+          rewardRows ?? []
+        );
       }
 
       /* -----------------------------------------------
@@ -232,11 +283,22 @@ export default function Home() {
         data: pendingRows,
         error: pendingError,
       } = await supabase
-        .from("reward_requests")
+        .from(
+          "reward_requests"
+        )
         .select("reward_id")
-        .eq("family_id", familyId)
-        .eq("member_id", childId)
-        .eq("status", "requested");
+        .eq(
+          "family_id",
+          familyId
+        )
+        .eq(
+          "member_id",
+          childId
+        )
+        .eq(
+          "status",
+          "requested"
+        );
 
       if (pendingError) {
         console.error(
@@ -246,7 +308,8 @@ export default function Home() {
       } else {
         setPendingRewardIds(
           (pendingRows ?? []).map(
-            (row) => row.reward_id
+            (row) =>
+              row.reward_id
           )
         );
       }
@@ -285,8 +348,12 @@ export default function Home() {
           ),
 
         supabase
-          .from("study_records")
-          .select("study_date")
+          .from(
+            "study_records"
+          )
+          .select(
+            "study_date"
+          )
           .eq(
             "family_id",
             familyId
@@ -342,39 +409,42 @@ export default function Home() {
 
       const attendanceData:
         AttendanceDay[] =
-        weekDates.map((day) => {
-          let status:
-            AttendanceStatus;
+        weekDates.map(
+          (day) => {
+            let status:
+              AttendanceStatus;
 
-          if (
-            !enabledDays.has(
-              day.weekday
-            )
-          ) {
-            status = "rest";
-          } else if (
-            completedDates.has(
-              day.date
-            )
-          ) {
-            status = "done";
-          } else if (
-            day.date < todayDate
-          ) {
-            status = "missed";
-          } else if (
-            day.date === todayDate
-          ) {
-            status = "today";
-          } else {
-            status = "future";
+            if (
+              !enabledDays.has(
+                day.weekday
+              )
+            ) {
+              status = "rest";
+            } else if (
+              completedDates.has(
+                day.date
+              )
+            ) {
+              status = "done";
+            } else if (
+              day.date < todayDate
+            ) {
+              status = "missed";
+            } else if (
+              day.date ===
+              todayDate
+            ) {
+              status = "today";
+            } else {
+              status = "future";
+            }
+
+            return {
+              ...day,
+              status,
+            };
           }
-
-          return {
-            ...day,
-            status,
-          };
-        });
+        );
 
       setAttendance(
         attendanceData
@@ -388,7 +458,9 @@ export default function Home() {
         data: plans,
         error: plansError,
       } = await supabase
-        .from("study_plans")
+        .from(
+          "study_plans"
+        )
         .select(
           "id, subject, note"
         )
@@ -404,8 +476,12 @@ export default function Home() {
           "study_date",
           todayDate
         )
-        .order("sort_order")
-        .order("created_at");
+        .order(
+          "sort_order"
+        )
+        .order(
+          "created_at"
+        );
 
       if (plansError) {
         console.error(
@@ -421,7 +497,8 @@ export default function Home() {
         );
 
         if (
-          todayPlanList.length > 0
+          todayPlanList.length >
+          0
         ) {
           const planIds =
             todayPlanList.map(
@@ -499,7 +576,9 @@ export default function Home() {
             0
           ) ?? 0;
 
-        setPoints(totalPoints);
+        setPoints(
+          totalPoints
+        );
       }
 
       /* -----------------------------------------------
@@ -512,7 +591,8 @@ export default function Home() {
       } = await supabase.rpc(
         "refresh_streak_status",
         {
-          p_today: todayDate,
+          p_today:
+            todayDate,
           p_award: false,
         }
       );
@@ -522,13 +602,16 @@ export default function Home() {
           "연속 공부 계산 오류:",
           streakError
         );
-      } else if (streakData) {
+      } else if (
+        streakData
+      ) {
         const result =
           streakData as StreakResult;
 
         setStreak(
           Number(
-            result.streak ?? 0
+            result.streak ??
+              0
           )
         );
       }
@@ -544,7 +627,10 @@ export default function Home() {
   ===================================================== */
 
   async function handleCompleteStudy() {
-    if (todayPlans.length === 0) {
+    if (
+      todayPlans.length ===
+      0
+    ) {
       alert(
         "오늘 등록된 공부 계획이 없어요."
       );
@@ -582,7 +668,8 @@ export default function Home() {
     } = await supabase.rpc(
       "refresh_streak_status",
       {
-        p_today: getToday(),
+        p_today:
+          getToday(),
         p_award: true,
       }
     );
@@ -608,7 +695,8 @@ export default function Home() {
 
       setStreak(
         Number(
-          streakResult.streak ?? 0
+          streakResult.streak ??
+            0
         )
       );
 
@@ -628,26 +716,34 @@ export default function Home() {
 
     setCompleted(true);
 
-    setAttendance((current) =>
-      current.map((day) =>
-        day.date === getToday() &&
-        day.status !== "rest"
-          ? {
-              ...day,
-              status: "done",
-            }
-          : day
-      )
+    setAttendance(
+      (current) =>
+        current.map(
+          (day) =>
+            day.date ===
+              getToday() &&
+            day.status !==
+              "rest"
+              ? {
+                  ...day,
+                  status:
+                    "done",
+                }
+              : day
+        )
     );
 
     if (
-      result.earned_points > 0
+      result.earned_points >
+      0
     ) {
       let message =
         `공부 완료! 🎉\n` +
         `공부 포인트 +${result.earned_points}P`;
 
-      if (bonusPoints > 0) {
+      if (
+        bonusPoints > 0
+      ) {
         message +=
           `\n🔥 연속 공부 보너스 +${bonusPoints}P`;
       }
@@ -673,7 +769,7 @@ export default function Home() {
       )
     ) {
       alert(
-        "이미 아빠 승인을 기다리고 있어요."
+        "이미 부모 승인을 기다리고 있어요."
       );
 
       return;
@@ -697,7 +793,7 @@ export default function Home() {
       window.confirm(
         `${reward.emoji || "🎁"} ${reward.title}\n\n` +
           `${reward.cost_points}P 상품을 교환 신청할까요?\n\n` +
-          `아빠가 승인하면 포인트가 차감됩니다.`
+          `부모가 승인하면 포인트가 차감됩니다.`
       );
 
     if (!ok) return;
@@ -741,18 +837,18 @@ export default function Home() {
       `교환 신청 완료! 🎁\n\n` +
         `${result.reward_title}\n` +
         `${result.cost_points}P\n\n` +
-        `아빠의 승인을 기다려주세요.`
+        `부모의 승인을 기다려주세요.`
     );
   }
 
   /* =====================================================
-     딸 자동로그인 해제
+     자녀 자동로그인 해제
   ===================================================== */
 
   async function handleChildLogout() {
     const ok =
       window.confirm(
-        "이 기기에서 딸 자동로그인을 해제할까요?\n\n다음 접속 때 가족 코드와 PIN을 다시 입력해야 합니다."
+        "이 기기에서 자녀 자동로그인을 해제할까요?\n\n다음 접속 때 가족 코드와 PIN을 다시 입력해야 합니다."
       );
 
     if (!ok) return;
@@ -774,7 +870,7 @@ export default function Home() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7]">
         <p className="font-semibold">
-          딸천재톡 불러오는 중...
+          SDgram 불러오는 중...
         </p>
       </main>
     );
@@ -787,13 +883,15 @@ export default function Home() {
   const completedThisWeek =
     attendance.filter(
       (day) =>
-        day.status === "done"
+        day.status ===
+        "done"
     ).length;
 
   const scheduledThisWeek =
     attendance.filter(
       (day) =>
-        day.status !== "rest"
+        day.status !==
+        "rest"
     ).length;
 
   const nextReward =
@@ -833,22 +931,25 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#F2F2F2] text-[#252525]">
       <div className="mx-auto min-h-screen max-w-md bg-[#F7F7F7] shadow-sm">
+
         {/* 상단 */}
 
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#EAEAEA] bg-[#FFD84D] px-5">
           <div>
             <h1 className="text-xl font-bold">
-              딸천재톡
+              SDgram
             </h1>
 
             <p className="text-[10px] text-[#666]">
-              {role === "child"
-                ? "👧 딸 모드"
-                : "👨 아빠 모드"}
+              {role ===
+              "child"
+                ? "👧 자녀 모드"
+                : "👨 부모 모드"}
             </p>
           </div>
 
-          {role === "parent" ? (
+          {role ===
+          "parent" ? (
             <button
               onClick={() =>
                 router.push(
@@ -856,7 +957,7 @@ export default function Home() {
                 )
               }
               className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-black/5"
-              aria-label="아빠 관리"
+              aria-label="부모 관리"
             >
               ⚙️
             </button>
@@ -874,11 +975,13 @@ export default function Home() {
         </header>
 
         <section className="px-4 pb-28 pt-5">
+
           {/* =================================================
               HOME
           ================================================= */}
 
-          {tab === "home" && (
+          {tab ===
+            "home" && (
             <>
               <div className="mb-5">
                 <p className="text-sm text-[#777]">
@@ -901,18 +1004,24 @@ export default function Home() {
                     </p>
 
                     <p className="mt-1 text-xl font-bold">
-                      🔥 {streak}회 연속
+                      🔥{" "}
+                      {streak}
+                      회 연속
                     </p>
                   </div>
 
                   <div className="rounded-full bg-[#FFF2EC] px-3 py-2 text-sm font-bold text-[#E8673C]">
-                    {streak < 3
+                    {streak <
+                    3
                       ? `3회까지 ${
-                          3 - streak
+                          3 -
+                          streak
                         }회`
-                      : streak < 5
+                      : streak <
+                        5
                       ? `5회까지 ${
-                          5 - streak
+                          5 -
+                          streak
                         }회`
                       : "5회 보너스 달성 🎉"}
                   </div>
@@ -925,7 +1034,7 @@ export default function Home() {
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm text-[#777]">
-                      아빠가 보낸 계획
+                      부모가 보낸 계획
                     </p>
 
                     <h3 className="mt-1 text-xl font-bold">
@@ -939,14 +1048,15 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-3">
-                  {todayPlans.length === 0 ? (
+                  {todayPlans.length ===
+                  0 ? (
                     <div className="rounded-xl bg-[#F7F7F7] p-5 text-center">
                       <p className="font-semibold">
                         오늘 등록된 공부가 없어요 😊
                       </p>
 
                       <p className="mt-1 text-sm text-[#888]">
-                        아빠가 공부 계획을 등록하면
+                        부모가 공부 계획을 등록하면
                         여기에 나타나요.
                       </p>
                     </div>
@@ -1025,7 +1135,8 @@ export default function Home() {
                     </p>
 
                     <p className="mt-1 text-3xl font-bold">
-                      ⭐ {points}{" "}
+                      ⭐{" "}
+                      {points}{" "}
                       <span className="text-base">
                         P
                       </span>
@@ -1034,7 +1145,9 @@ export default function Home() {
 
                   <button
                     onClick={() =>
-                      setTab("shop")
+                      setTab(
+                        "shop"
+                      )
                     }
                     className="rounded-xl bg-[#F4F4F4] px-4 py-2 text-sm font-semibold"
                   >
@@ -1088,7 +1201,7 @@ export default function Home() {
                   </>
                 ) : (
                   <div className="mt-3 rounded-xl bg-[#F7F7F7] p-4 text-center text-sm text-[#777]">
-                    아빠가 상점 상품을 등록하면
+                    부모가 상점 상품을 등록하면
                     여기에 표시돼요.
                   </div>
                 )}
@@ -1100,7 +1213,8 @@ export default function Home() {
               STUDY
           ================================================= */}
 
-          {tab === "study" && (
+          {tab ===
+            "study" && (
             <div>
               <h2 className="mb-1 text-2xl font-bold">
                 공부 출석판 📚
@@ -1185,7 +1299,8 @@ export default function Home() {
                         day.status ===
                         "future"
                       ) {
-                        symbol = "○";
+                        symbol =
+                          "○";
 
                         background =
                           "bg-[#F7F7F7]";
@@ -1229,15 +1344,19 @@ export default function Home() {
                     <span>
                       ✅ 완료
                     </span>
+
                     <span>
                       ⏳ 오늘
                     </span>
+
                     <span>
                       ❌ 결석
                     </span>
+
                     <span>
                       ○ 예정
                     </span>
+
                     <span>
                       − 쉬는 날
                     </span>
@@ -1251,7 +1370,9 @@ export default function Home() {
                 </p>
 
                 <p className="mt-2 text-2xl font-bold">
-                  🔥 {streak}회 연속
+                  🔥{" "}
+                  {streak}
+                  회 연속
                 </p>
 
                 <div className="mt-5 space-y-2 text-sm">
@@ -1283,7 +1404,8 @@ export default function Home() {
               SHOP
           ================================================= */}
 
-          {tab === "shop" && (
+          {tab ===
+            "shop" && (
             <div>
               <div className="mb-5 flex items-end justify-between">
                 <div>
@@ -1292,7 +1414,8 @@ export default function Home() {
                   </p>
 
                   <h2 className="text-3xl font-bold">
-                    ⭐ {points}P
+                    ⭐{" "}
+                    {points}P
                   </h2>
                 </div>
 
@@ -1409,7 +1532,7 @@ export default function Home() {
 
                           {pending && (
                             <p className="mt-3 text-right text-xs font-semibold text-[#A07B00]">
-                              아빠의 승인을 기다리고 있어요.
+                              부모의 승인을 기다리고 있어요.
                             </p>
                           )}
                         </div>
@@ -1425,7 +1548,8 @@ export default function Home() {
               RECORD
           ================================================= */}
 
-          {tab === "record" && (
+          {tab ===
+            "record" && (
             <div>
               <h2 className="mb-4 text-2xl font-bold">
                 나의 기록 🏆
@@ -1438,7 +1562,8 @@ export default function Home() {
                   </p>
 
                   <p className="mt-2 text-2xl font-bold">
-                    🔥 {streak}회
+                    🔥{" "}
+                    {streak}회
                   </p>
                 </div>
 
@@ -1448,7 +1573,8 @@ export default function Home() {
                   </p>
 
                   <p className="mt-2 text-2xl font-bold">
-                    ⭐ {points}P
+                    ⭐{" "}
+                    {points}P
                   </p>
                 </div>
 
@@ -1592,3 +1718,4 @@ function MenuButton({
     </button>
   );
 }
+

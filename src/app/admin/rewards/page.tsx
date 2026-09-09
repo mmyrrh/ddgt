@@ -179,7 +179,7 @@ export default function RewardsAdminPage() {
         <section className="p-5">
           <div className="mb-6">
             <p className="text-sm text-[#777]">
-              아빠 관리
+              부모 관리
             </p>
 
             <h2 className="mt-1 text-2xl font-bold">

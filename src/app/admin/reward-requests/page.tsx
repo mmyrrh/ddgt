@@ -30,6 +30,12 @@ type RequestItem = RequestRow & {
   reward_emoji: string;
 };
 
+type Child = {
+  id: string;
+  display_name: string;
+  avatar_emoji: string | null;
+};
+
 function statusText(status: RequestStatus) {
   if (status === "requested") return "승인 대기";
   if (status === "approved") return "승인 완료";
@@ -41,7 +47,8 @@ export default function RewardRequestsPage() {
   const router = useRouter();
 
   const [familyId, setFamilyId] = useState("");
-  const [childId, setChildId] = useState("");
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState("");
   const [childName, setChildName] = useState("");
 
   const [points, setPoints] = useState(0);
@@ -78,28 +85,40 @@ export default function RewardRequestsPage() {
       }
 
       const {
-        data: child,
+        data: childRows,
         error: childError,
       } = await supabase
         .from("family_members")
-        .select("id, display_name")
+        .select("id, display_name, avatar_emoji")
         .eq("family_id", family.id)
         .eq("role", "child")
         .eq("is_active", true)
-        .limit(1)
-        .single();
+        .order("created_at", {
+          ascending: true,
+        });
 
-      if (childError || !child) {
-        setMessage("딸 프로필을 찾을 수 없습니다.");
+      if (childError) {
+        setMessage(childError.message);
         setLoading(false);
         return;
       }
 
-      setFamilyId(family.id);
-      setChildId(child.id);
-      setChildName(child.display_name);
+      const childList = (childRows ?? []) as Child[];
 
-      await loadData(family.id, child.id);
+      if (childList.length === 0) {
+        setMessage("자녀 프로필을 찾을 수 없습니다.");
+        setLoading(false);
+        return;
+      }
+
+      const firstChild = childList[0];
+
+      setFamilyId(family.id);
+      setChildren(childList);
+      setSelectedChildId(firstChild.id);
+      setChildName(firstChild.display_name);
+
+      await loadData(family.id, firstChild.id);
 
       setLoading(false);
     }
@@ -111,6 +130,8 @@ export default function RewardRequestsPage() {
     targetFamilyId: string,
     targetChildId: string
   ) {
+    setMessage("");
+
     const {
       data: requestRows,
       error: requestError,
@@ -130,8 +151,7 @@ export default function RewardRequestsPage() {
       return;
     }
 
-    const rows =
-      (requestRows ?? []) as RequestRow[];
+    const rows = (requestRows ?? []) as RequestRow[];
 
     const rewardIds = [
       ...new Set(rows.map((row) => row.reward_id)),
@@ -153,30 +173,22 @@ export default function RewardRequestsPage() {
         return;
       }
 
-      rewardRows =
-        (data ?? []) as RewardRow[];
+      rewardRows = (data ?? []) as RewardRow[];
     }
 
     const rewardMap = new Map(
-      rewardRows.map((reward) => [
-        reward.id,
-        reward,
-      ])
+      rewardRows.map((reward) => [reward.id, reward])
     );
 
-    const merged: RequestItem[] =
-      rows.map((row) => {
-        const reward =
-          rewardMap.get(row.reward_id);
+    const merged: RequestItem[] = rows.map((row) => {
+      const reward = rewardMap.get(row.reward_id);
 
-        return {
-          ...row,
-          reward_title:
-            reward?.title ?? "삭제된 상품",
-          reward_emoji:
-            reward?.emoji ?? "🎁",
-        };
-      });
+      return {
+        ...row,
+        reward_title: reward?.title ?? "삭제된 상품",
+        reward_emoji: reward?.emoji ?? "🎁",
+      };
+    });
 
     setRequests(merged);
 
@@ -203,14 +215,19 @@ export default function RewardRequestsPage() {
     setPoints(totalPoints);
   }
 
+  async function selectChild(child: Child) {
+    setSelectedChildId(child.id);
+    setChildName(child.display_name);
+    setMessage("");
+
+    await loadData(familyId, child.id);
+  }
+
   async function decideRequest(
     request: RequestItem,
     decision: "approved" | "rejected"
   ) {
-    const action =
-      decision === "approved"
-        ? "승인"
-        : "거절";
+    const action = decision === "approved" ? "승인" : "거절";
 
     const ok = window.confirm(
       `${request.reward_emoji} ${request.reward_title}\n\n` +
@@ -228,13 +245,10 @@ export default function RewardRequestsPage() {
     const {
       data,
       error,
-    } = await supabase.rpc(
-      "decide_reward_request",
-      {
-        p_request_id: request.id,
-        p_decision: decision,
-      }
-    );
+    } = await supabase.rpc("decide_reward_request", {
+      p_request_id: request.id,
+      p_decision: decision,
+    });
 
     setProcessingId("");
 
@@ -248,7 +262,9 @@ export default function RewardRequestsPage() {
       total_points: number;
     };
 
-    setPoints(Number(result.total_points ?? points));
+    setPoints(
+      Number(result.total_points ?? points)
+    );
 
     setMessage(
       decision === "approved"
@@ -256,7 +272,7 @@ export default function RewardRequestsPage() {
         : `${request.reward_title} 교환을 거절했습니다.`
     );
 
-    await loadData(familyId, childId);
+    await loadData(familyId, selectedChildId);
   }
 
   if (loading) {
@@ -269,17 +285,13 @@ export default function RewardRequestsPage() {
     );
   }
 
-  const pendingRequests =
-    requests.filter(
-      (request) =>
-        request.status === "requested"
-    );
+  const pendingRequests = requests.filter(
+    (request) => request.status === "requested"
+  );
 
-  const historyRequests =
-    requests.filter(
-      (request) =>
-        request.status !== "requested"
-    );
+  const historyRequests = requests.filter(
+    (request) => request.status !== "requested"
+  );
 
   return (
     <main className="min-h-screen bg-[#F2F2F2] text-[#252525]">
@@ -298,6 +310,50 @@ export default function RewardRequestsPage() {
         </header>
 
         <section className="p-5">
+          <div className="mb-5">
+            <h2 className="mb-3 text-lg font-bold">
+              자녀 선택
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              {children.map((child) => {
+                const selected =
+                  child.id === selectedChildId;
+
+                return (
+                  <button
+                    key={child.id}
+                    type="button"
+                    onClick={() => selectChild(child)}
+                    className={`rounded-2xl border-2 p-4 text-left transition ${
+                      selected
+                        ? "border-[#FFD84D] bg-[#FFF9D9]"
+                        : "border-transparent bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <span className="mr-3 text-3xl">
+                        {child.avatar_emoji ?? "👦"}
+                      </span>
+
+                      <div>
+                        <p className="font-bold">
+                          {child.display_name}
+                        </p>
+
+                        {selected && (
+                          <p className="mt-1 text-xs font-semibold text-[#B08A00]">
+                            선택됨
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="mb-5 rounded-2xl bg-white p-5 shadow-sm">
             <p className="text-sm text-[#777]">
               {childName} 현재 포인트
@@ -450,3 +506,4 @@ export default function RewardRequestsPage() {
     </main>
   );
 }
+

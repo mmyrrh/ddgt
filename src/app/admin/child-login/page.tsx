@@ -2,79 +2,59 @@
 
 import {
   FormEvent,
-  KeyboardEvent,
   useEffect,
-  useRef,
   useState,
 } from "react";
 
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-import {
-  getEnglishKeyFromCode,
-  normalizeFamilyCodeInput,
-} from "@/lib/familyCode";
-
-type FamilyCodeResult = {
-  family_code: string;
+type Child = {
+  id: string;
+  display_name: string;
+  avatar_emoji: string | null;
 };
 
 export default function ChildLoginAdminPage() {
   const router = useRouter();
 
-  const familyCodeInputRef =
-    useRef<HTMLInputElement>(null);
-
-  const composingRef =
-    useRef(false);
-
-  const suppressNativeChangeRef =
-    useRef(false);
-
   const [familyCode, setFamilyCode] =
     useState("");
 
-  const [
-    savedFamilyCode,
-    setSavedFamilyCode,
-  ] = useState("");
+  const [children, setChildren] =
+    useState<Child[]>([]);
 
-  const [childName, setChildName] =
+  const [selectedChildId, setSelectedChildId] =
     useState("");
 
   const [pin, setPin] =
     useState("");
 
-  const [
-    pinConfirm,
-    setPinConfirm,
-  ] = useState("");
+  const [confirmPin, setConfirmPin] =
+    useState("");
 
   const [loading, setLoading] =
     useState(true);
 
-  const [
-    savingCode,
-    setSavingCode,
-  ] = useState(false);
-
-  const [
-    savingPin,
-    setSavingPin,
-  ] = useState(false);
+  const [saving, setSaving] =
+    useState(false);
 
   const [message, setMessage] =
     useState("");
 
   /* =========================================================
-     초기 데이터
+     가족 정보 + 자녀 목록 불러오기
   ========================================================= */
 
   useEffect(() => {
-    async function loadData() {
+    async function loadFamily() {
+      setLoading(true);
+      setMessage("");
+
       const {
-        data: { user },
+        data: {
+          user,
+        },
       } = await supabase.auth.getUser();
 
       if (!user) {
@@ -88,211 +68,131 @@ export default function ChildLoginAdminPage() {
       } = await supabase
         .from("families")
         .select("id, family_code")
-        .eq(
-          "owner_user_id",
-          user.id
-        )
+        .eq("owner_user_id", user.id)
         .limit(1)
         .single();
 
-      if (
-        familyError ||
-        !family
-      ) {
-        router.replace("/setup");
+      if (familyError || !family) {
+        console.error(
+          "가족 정보 불러오기 오류:",
+          familyError
+        );
+
+        setMessage(
+          "가족 정보를 불러올 수 없습니다."
+        );
+
+        setLoading(false);
         return;
       }
 
-      const normalizedCode =
-        normalizeFamilyCodeInput(
-          family.family_code
-        );
-
       setFamilyCode(
-        normalizedCode
-      );
-
-      setSavedFamilyCode(
-        normalizedCode
+        family.family_code ?? ""
       );
 
       const {
-        data: child,
+        data: childData,
         error: childError,
       } = await supabase
         .from("family_members")
-        .select("display_name")
+        .select(
+          "id, display_name, avatar_emoji"
+        )
         .eq(
           "family_id",
           family.id
         )
-        .eq("role", "child")
+        .eq(
+          "role",
+          "child"
+        )
         .eq(
           "is_active",
           true
         )
-        .limit(1)
-        .single();
+        .order(
+          "created_at",
+          {
+            ascending: true,
+          }
+        );
+
+      if (childError) {
+        console.error(
+          "자녀 목록 불러오기 오류:",
+          childError
+        );
+
+        setMessage(
+          "자녀 목록을 불러올 수 없습니다."
+        );
+
+        setLoading(false);
+        return;
+      }
+
+      const loadedChildren =
+        (childData ?? []) as Child[];
+
+      setChildren(
+        loadedChildren
+      );
 
       if (
-        childError ||
-        !child
+        loadedChildren.length > 0
       ) {
-        setChildName("딸");
-      } else {
-        setChildName(
-          child.display_name
+        setSelectedChildId(
+          loadedChildren[0].id
         );
       }
 
       setLoading(false);
     }
 
-    loadData();
+    loadFamily();
   }, [router]);
 
   /* =========================================================
-     가족코드 물리 키보드 처리
+     가족코드 저장
   ========================================================= */
 
-  function handleFamilyCodeKeyDown(
-    e: KeyboardEvent<HTMLInputElement>
-  ) {
-    const englishKey =
-      getEnglishKeyFromCode(
-        e.code
-      );
-
-    if (!englishKey) {
-      return;
-    }
-
-    e.preventDefault();
-
-    suppressNativeChangeRef.current =
-      true;
-
-    const start =
-      e.currentTarget.selectionStart ??
-      familyCode.length;
-
-    const end =
-      e.currentTarget.selectionEnd ??
-      start;
-
-    const nextRaw =
-      familyCode.slice(0, start) +
-      englishKey +
-      familyCode.slice(end);
-
-    const nextValue =
-      normalizeFamilyCodeInput(
-        nextRaw
-      );
-
-    setFamilyCode(
-      nextValue
-    );
-
-    const nextCaret =
-      Math.min(
-        start + 1,
-        nextValue.length
-      );
-
-    requestAnimationFrame(() => {
-      familyCodeInputRef.current?.setSelectionRange(
-        nextCaret,
-        nextCaret
-      );
-
-      if (!composingRef.current) {
-        suppressNativeChangeRef.current =
-          false;
-      }
-    });
-  }
-
-  function handleFamilyCodeChange(
-    value: string
-  ) {
-    if (
-      composingRef.current ||
-      suppressNativeChangeRef.current
-    ) {
-      return;
-    }
-
-    setFamilyCode(
-      normalizeFamilyCodeInput(
-        value
-      )
-    );
-  }
-
-  function handleCompositionStart() {
-    composingRef.current =
-      true;
-  }
-
-  function handleCompositionEnd() {
-    composingRef.current =
-      false;
-
-    requestAnimationFrame(() => {
-      suppressNativeChangeRef.current =
-        false;
-    });
-  }
-
-  /* =========================================================
-     가족코드 변경
-  ========================================================= */
-
-  async function handleFamilyCodeSubmit(
+  async function handleSaveFamilyCode(
     e: FormEvent
   ) {
     e.preventDefault();
 
     setMessage("");
 
-    const normalizedCode =
-      normalizeFamilyCodeInput(
-        familyCode
-      );
-
-    setFamilyCode(
-      normalizedCode
-    );
-
     if (
-      !/^[A-Z0-9]{4,12}$/.test(
-        normalizedCode
+      !/^[A-Za-z0-9]{4,12}$/.test(
+        familyCode
       )
     ) {
       setMessage(
-        "가족코드는 영문 또는 숫자 4~12자리로 입력해주세요."
+        "가족코드는 영문 또는 숫자 4~12자리입니다."
       );
 
       return;
     }
 
-    setSavingCode(true);
-
     const {
-      data,
       error,
     } = await supabase.rpc(
       "set_family_code",
       {
         p_family_code:
-          normalizedCode,
+          familyCode
+            .trim()
+            .toUpperCase(),
       }
     );
 
-    setSavingCode(false);
-
     if (error) {
+      console.error(
+        "가족코드 저장 오류:",
+        error
+      );
+
       setMessage(
         error.message
       );
@@ -300,37 +200,35 @@ export default function ChildLoginAdminPage() {
       return;
     }
 
-    const result =
-      data as FamilyCodeResult;
-
-    const resultCode =
-      normalizeFamilyCodeInput(
-        result.family_code
-      );
-
     setFamilyCode(
-      resultCode
-    );
-
-    setSavedFamilyCode(
-      resultCode
+      familyCode
+        .trim()
+        .toUpperCase()
     );
 
     setMessage(
-      `가족코드를 ${resultCode}(으)로 변경했습니다. ✅`
+      "가족코드를 저장했습니다."
     );
   }
 
   /* =========================================================
-     PIN 저장
+     자녀 PIN 저장
   ========================================================= */
 
-  async function handlePinSubmit(
+  async function handleSavePin(
     e: FormEvent
   ) {
     e.preventDefault();
 
     setMessage("");
+
+    if (!selectedChildId) {
+      setMessage(
+        "자녀를 선택해주세요."
+      );
+
+      return;
+    }
 
     if (!/^\d{6}$/.test(pin)) {
       setMessage(
@@ -340,28 +238,36 @@ export default function ChildLoginAdminPage() {
       return;
     }
 
-    if (pin !== pinConfirm) {
+    if (pin !== confirmPin) {
       setMessage(
-        "PIN 확인 값이 서로 다릅니다."
+        "PIN이 서로 일치하지 않습니다."
       );
 
       return;
     }
 
-    setSavingPin(true);
+    setSaving(true);
 
     const {
+      data,
       error,
     } = await supabase.rpc(
       "set_child_pin",
       {
+        p_child_id:
+          selectedChildId,
         p_pin: pin,
       }
     );
 
-    setSavingPin(false);
+    setSaving(false);
 
     if (error) {
+      console.error(
+        "자녀 PIN 저장 오류:",
+        error
+      );
+
       setMessage(
         error.message
       );
@@ -369,201 +275,208 @@ export default function ChildLoginAdminPage() {
       return;
     }
 
+    const childName =
+      data?.child_name ??
+      children.find(
+        (child) =>
+          child.id ===
+          selectedChildId
+      )?.display_name ??
+      "자녀";
+
     setPin("");
-    setPinConfirm("");
+    setConfirmPin("");
 
     setMessage(
-      `${childName}의 로그인 PIN을 저장했습니다. ✅`
+      `${childName}의 PIN을 저장했습니다.`
     );
   }
 
   /* =========================================================
-     복사
+     로딩
   ========================================================= */
-
-  async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(
-        savedFamilyCode
-      );
-
-      setMessage(
-        "가족코드를 복사했습니다. ✅"
-      );
-    } catch {
-      setMessage(
-        "가족코드를 복사하지 못했습니다."
-      );
-    }
-  }
 
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7]">
         <p className="font-semibold">
-          딸 로그인 설정 불러오는 중...
+          설정을 불러오는 중...
         </p>
       </main>
     );
   }
 
+  /* =========================================================
+     UI
+  ========================================================= */
+
   return (
-    <main className="min-h-screen bg-[#F2F2F2] text-[#252525]">
-      <div className="mx-auto min-h-screen max-w-md bg-[#F7F7F7]">
-        <header className="flex h-16 items-center bg-[#FFD84D] px-5">
+    <main className="min-h-screen bg-[#F2F2F2]">
+      <div className="mx-auto min-h-screen max-w-md bg-white">
+
+        {/* 헤더 */}
+
+        <header className="bg-[#FFD84D] px-6 pb-8 pt-12">
           <button
             type="button"
             onClick={() =>
               router.push("/admin")
             }
-            className="mr-4 text-xl"
+            className="mb-6 text-sm font-semibold"
           >
-            ←
+            ← 부모 모드
           </button>
 
-          <div>
-            <h1 className="text-xl font-bold">
-              딸 로그인 설정
-            </h1>
+          <h1 className="text-2xl font-bold">
+            자녀 로그인 설정
+          </h1>
 
-            <p className="text-[10px] text-[#666]">
-              🔐 가족코드 · PIN 관리
-            </p>
-          </div>
+          <p className="mt-2 text-sm text-[#555]">
+            자녀가 사용할 가족코드와 PIN을 설정해요.
+          </p>
         </header>
 
-        <section className="p-5">
-          {/* 현재 정보 */}
+        <section className="space-y-7 px-6 py-8">
 
-          <div className="mb-5 rounded-2xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-[#777]">
-              현재 딸 로그인 정보
-            </p>
+          {/* =================================================
+              자녀 선택
+          ================================================= */}
 
-            <div className="mt-4 flex items-center justify-between rounded-xl bg-[#FFF4C2] p-4">
-              <div>
-                <p className="text-xs text-[#777]">
-                  가족 코드
-                </p>
-
-                <p className="mt-1 text-2xl font-black tracking-[0.12em]">
-                  {savedFamilyCode}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={copyCode}
-                className="rounded-lg bg-white px-3 py-2 text-sm font-bold shadow-sm"
-              >
-                복사
-              </button>
-            </div>
-          </div>
-
-          {/* 가족코드 */}
-
-          <form
-            onSubmit={
-              handleFamilyCodeSubmit
-            }
-            className="rounded-2xl bg-white p-5 shadow-sm"
-          >
-            <p className="text-sm text-[#777]">
-              가족 코드
-            </p>
-
-            <h2 className="mt-1 text-xl font-bold">
-              원하는 코드로 변경
+          <div>
+            <h2 className="mb-3 text-lg font-bold">
+              👧👦 자녀 선택
             </h2>
 
-            <div className="mt-5">
-              <label className="mb-2 block text-sm font-bold">
-                가족코드
-              </label>
+            {children.length === 0 ? (
+              <div className="rounded-xl bg-[#F7F7F7] p-4 text-sm text-[#777]">
+                등록된 자녀가 없습니다.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {children.map(
+                  (child) => {
+                    const selected =
+                      child.id ===
+                      selectedChildId;
 
+                    return (
+                      <button
+                        key={child.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedChildId(
+                            child.id
+                          )
+                        }
+                        className={`rounded-2xl border-2 p-5 text-center transition ${
+                          selected
+                            ? "border-[#FFD84D] bg-[#FFF9DD]"
+                            : "border-[#E5E5E5] bg-white"
+                        }`}
+                      >
+                        <div className="text-4xl">
+                          {child.avatar_emoji ??
+                            "👦"}
+                        </div>
+
+                        <div className="mt-2 font-bold">
+                          {
+                            child.display_name
+                          }
+                        </div>
+
+                        {selected && (
+                          <div className="mt-1 text-xs font-semibold text-[#777]">
+                            선택됨 ✓
+                          </div>
+                        )}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* =================================================
+              가족코드
+          ================================================= */}
+
+          <div>
+            <h2 className="mb-3 text-lg font-bold">
+              🔑 가족 코드
+            </h2>
+
+            <form
+              onSubmit={
+                handleSaveFamilyCode
+              }
+              className="space-y-3"
+            >
               <input
-                ref={
-                  familyCodeInputRef
-                }
                 value={familyCode}
-                onKeyDown={
-                  handleFamilyCodeKeyDown
-                }
-                onCompositionStart={
-                  handleCompositionStart
-                }
-                onCompositionEnd={
-                  handleCompositionEnd
-                }
                 onChange={(e) =>
-                  handleFamilyCodeChange(
+                  setFamilyCode(
                     e.target.value
+                      .replace(
+                        /[^a-zA-Z0-9]/g,
+                        ""
+                      )
+                      .toUpperCase()
                   )
                 }
                 maxLength={12}
-                inputMode="text"
-                lang="en"
-                autoCapitalize="characters"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="예: MYFAMILY"
+                placeholder="가족코드"
                 className="w-full rounded-xl border border-[#DDD] p-4 text-center text-lg font-bold uppercase tracking-[0.12em]"
               />
 
-              <p className="mt-2 text-xs leading-5 text-[#888]">
-                영문 또는 숫자 4~12자리
-              </p>
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-[#F3F3F3] py-3 font-bold"
+              >
+                가족코드 저장
+              </button>
+            </form>
+          </div>
 
-              <p className="text-xs leading-5 text-[#888]">
-                한글 입력 상태에서도 영문 키로 입력됩니다.
-              </p>
+          {/* =================================================
+              PIN
+          ================================================= */}
 
-              <p className="text-xs leading-5 text-[#888]">
-                영문은 항상 대문자로 표시됩니다.
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={
-                savingCode ||
-                familyCode ===
-                  savedFamilyCode
-              }
-              className="mt-5 w-full rounded-xl bg-[#FFD84D] py-4 font-bold disabled:opacity-40"
-            >
-              {savingCode
-                ? "변경 중..."
-                : familyCode ===
-                  savedFamilyCode
-                ? "현재 가족코드"
-                : "가족코드 변경"}
-            </button>
-          </form>
-
-          {/* PIN */}
-
-          <form
-            onSubmit={
-              handlePinSubmit
-            }
-            className="mt-5 rounded-2xl bg-white p-5 shadow-sm"
-          >
-            <p className="text-sm text-[#777]">
-              {childName} 로그인
-            </p>
-
-            <h2 className="mt-1 text-xl font-bold">
-              PIN 설정 🔐
+          <div>
+            <h2 className="mb-3 text-lg font-bold">
+              🔐 자녀 PIN
             </h2>
 
-            <div className="mt-5">
-              <label className="mb-2 block text-sm font-bold">
-                숫자 6자리 PIN
-              </label>
+            {selectedChildId && (
+              <p className="mb-4 text-sm text-[#777]">
+                현재 선택:
+                {" "}
+                <span className="font-bold text-[#333]">
+                  {
+                    children.find(
+                      (child) =>
+                        child.id ===
+                        selectedChildId
+                    )?.avatar_emoji ??
+                    "👦"
+                  }
+                  {" "}
+                  {
+                    children.find(
+                      (child) =>
+                        child.id ===
+                        selectedChildId
+                    )?.display_name
+                  }
+                </span>
+              </p>
+            )}
 
+            <form
+              onSubmit={handleSavePin}
+              className="space-y-3"
+            >
               <input
                 type="password"
                 inputMode="numeric"
@@ -577,68 +490,61 @@ export default function ChildLoginAdminPage() {
                     )
                   )
                 }
-                placeholder="● ● ● ● ● ●"
+                placeholder="새 PIN 6자리"
+                autoComplete="off"
                 className="w-full rounded-xl border border-[#DDD] p-4 text-center text-xl tracking-[0.4em]"
               />
-            </div>
-
-            <div className="mt-4">
-              <label className="mb-2 block text-sm font-bold">
-                PIN 확인
-              </label>
 
               <input
                 type="password"
                 inputMode="numeric"
                 maxLength={6}
-                value={
-                  pinConfirm
-                }
+                value={confirmPin}
                 onChange={(e) =>
-                  setPinConfirm(
+                  setConfirmPin(
                     e.target.value.replace(
                       /\D/g,
                       ""
                     )
                   )
                 }
-                placeholder="● ● ● ● ● ●"
+                placeholder="PIN 다시 입력"
+                autoComplete="off"
                 className="w-full rounded-xl border border-[#DDD] p-4 text-center text-xl tracking-[0.4em]"
               />
-            </div>
 
-            <button
-              type="submit"
-              disabled={savingPin}
-              className="mt-5 w-full rounded-xl bg-[#FFD84D] py-4 font-bold disabled:opacity-50"
-            >
-              {savingPin
-                ? "저장 중..."
-                : "딸 로그인 PIN 저장"}
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={
+                  saving ||
+                  !selectedChildId
+                }
+                className="w-full rounded-xl bg-[#FFD84D] py-4 font-bold disabled:opacity-50"
+              >
+                {saving
+                  ? "저장 중..."
+                  : "선택한 자녀 PIN 저장"}
+              </button>
+            </form>
+          </div>
+
+          {/* 메시지 */}
 
           {message && (
-            <div className="mt-4 rounded-xl bg-[#FFF4C2] p-4 text-sm">
+            <div className="rounded-xl bg-[#FFF4C2] p-4 text-sm">
               {message}
             </div>
           )}
 
-          <div className="mt-5 rounded-2xl bg-white p-5 shadow-sm">
-            <p className="font-bold">
-              📱 가족코드를 변경하면?
-            </p>
+          {/* 안내 */}
 
-            <p className="mt-2 text-sm leading-6 text-[#777]">
-              이미 자동로그인되어 있는 딸 기기는
-              그대로 사용할 수 있습니다.
-            </p>
-
-            <p className="mt-2 text-sm leading-6 text-[#777]">
-              다시 로그인할 때부터 새 가족코드를
-              사용하면 됩니다.
-            </p>
+          <div className="rounded-xl bg-[#F7F7F7] p-4 text-sm leading-6 text-[#666]">
+            💡 자녀가 자신의 기기에서
+            <br />
+            가족코드와 본인의 PIN을 입력하면
+            해당 자녀로 로그인할 수 있어요.
           </div>
+
         </section>
       </div>
     </main>

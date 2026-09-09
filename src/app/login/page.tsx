@@ -141,18 +141,18 @@ export default function LoginPage() {
       <div className="mx-auto flex min-h-screen max-w-md flex-col bg-white">
         <header className="bg-[#FFD84D] px-6 pb-8 pt-16">
           <h1 className="text-3xl font-bold">
-            딸천재톡
+            SDgram
           </h1>
 
           <p className="mt-2 text-sm text-[#555]">
-            아빠와 딸이 함께 만드는 공부 습관
+            부모와 딸이 함께 만드는 공부 습관
           </p>
         </header>
 
         <section className="flex flex-1 flex-col justify-center px-7 py-8">
           <div className="mb-8">
             <p className="text-sm text-[#888]">
-              👨 아빠 계정
+              👨 부모 계정
             </p>
 
             <h2 className="mt-1 text-2xl font-bold">
@@ -213,8 +213,8 @@ export default function LoginPage() {
               {loading
                 ? "처리 중..."
                 : isSignup
-                ? "아빠 계정 만들기"
-                : "아빠 로그인"}
+                ? "부모 계정 만들기"
+                : "부모 로그인"}
             </button>
           </form>
 
